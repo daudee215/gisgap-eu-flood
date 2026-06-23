@@ -188,8 +188,8 @@
             </div>
             <p class="hint">Probability classes defined in Annex&nbsp;I of Directive&nbsp;2007/60/EC: high (≈30-yr), medium (≈100-yr) and low (≈300-yr) return periods.</p>
 
-            <div class="control-label" for="wl">Design water level <span id="wlVal">2.6 m</span></div>
-            <input type="range" id="wl" min="0" max="6" step="0.1" value="2.6" aria-describedby="wlHint">
+            <div class="control-label" for="wl">Design water level <span id="wlVal">4.0 m</span></div>
+            <input type="range" id="wl" min="0" max="7" step="0.1" value="4.0" aria-describedby="wlHint">
             <p class="hint" id="wlHint">Planar flood-surface height above the AOI reference datum (NAP-equivalent).</p>
 
             <div class="control-label" for="slr">Climate add-on (SLR / surge) <span id="slrVal">+0.0 m</span></div>
@@ -457,8 +457,8 @@
   }
 
   // ---------- state ----------
-  const SCN={ high:{wl:1.7,label:'High',rp:'T=30 yr'}, med:{wl:2.6,label:'Medium',rp:'T=100 yr'}, low:{wl:3.6,label:'Low',rp:'T=300 yr'} };
-  const state={ scn:'med', wl:2.6, slr:0.0,
+  const SCN={ high:{wl:3.4,label:'High',rp:'T=30 yr'}, med:{wl:4.0,label:'Medium',rp:'T=100 yr'}, low:{wl:5.2,label:'Low',rp:'T=300 yr'} };
+  const state={ scn:'med', wl:4.0, slr:0.0,
     layers:{hill:true,water:true,roads:true,bldg:true,crit:true} };
 
   // ---------- canvas ----------
@@ -608,7 +608,7 @@
   function readHash(){
     const h=new URLSearchParams(location.hash.slice(1));
     if(h.has('scn')&&SCN[h.get('scn')]) state.scn=h.get('scn');
-    if(h.has('wl')) state.wl=Math.max(0,Math.min(6,parseFloat(h.get('wl'))||SCN[state.scn].wl));
+    if(h.has('wl')) state.wl=Math.max(0,Math.min(7,parseFloat(h.get('wl'))||SCN[state.scn].wl));
     else state.wl=SCN[state.scn].wl;
     if(h.has('slr')) state.slr=Math.max(0,Math.min(1.5,parseFloat(h.get('slr'))||0));
     for(const k of ['hill','water','roads','bldg','crit']){ if(h.get(k)==='0') state.layers[k]=false; }
