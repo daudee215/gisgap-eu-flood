@@ -340,8 +340,8 @@
   // ---------- terrain ----------
   // value-noise DEM + carved river channel + sea gradient on the SW corner.
   const rnd=mulberry32(20070060); // seed = directive number, for fun + reproducibility
-  function valueNoise(seed){
-    const r=mulberry32(seed); const S=24;            // coarse lattice
+  function valueNoise(seed,S){
+    const r=mulberry32(seed);                       // lattice resolution = S
     const lat=new Float32Array((S+1)*(S+1));
     for(let i=0;i<lat.length;i++) lat[i]=r();
     return (gx,gy)=>{
@@ -354,7 +354,8 @@
       return (a*(1-sx)+b*sx)*(1-sy)+(c*(1-sx)+d*sx)*sy;
     };
   }
-  const n1=valueNoise(11), n2=valueNoise(37), n3=valueNoise(83);
+  // three octaves at increasing lattice resolution (inputs stay within [0,GW]x[0,GH])
+  const n1=valueNoise(11,7), n2=valueNoise(37,16), n3=valueNoise(83,34);
 
   // river path: sinusoid running W->E, dipping toward the sea corner
   function riverY(gx){ return GH*(0.62 + 0.16*Math.sin(gx/GW*Math.PI*1.6) - 0.10*(gx/GW)); }
@@ -365,7 +366,7 @@
   for(let gy=0; gy<GH; gy++){
     for(let gx=0; gx<GW; gx++){
       const i=gy*GW+gx;
-      let e = 9*n1(gx,gy) + 4.5*n2(gx*1.7,gy*1.7) + 2*n3(gx*3.1,gy*3.1);
+      let e = 9*n1(gx,gy) + 4.5*n2(gx,gy) + 2*n3(gx,gy);
       // gentle regional slope: high in NE, low toward SW sea corner
       e += 5*(gx/GW) + 3*((GH-gy)/GH);
       e -= 7*Math.exp(-(Math.pow(gx/GW,2)+Math.pow(gy/GH,2))/0.10); // SW sea depression
