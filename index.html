@@ -151,6 +151,15 @@
     .btn-sm{font-size:12px; padding:7px 12px}
     .btn-outline{background:#fff; color:var(--green); border:1px solid var(--border)}
     .vis-hidden{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+
+    /* ---- overflow hardening (audit rule: no-horizontal-scroll @360px) ---- */
+    html,body{overflow-x:hidden; max-width:100%}
+    .grid-2>*{min-width:0}            /* allow grid items to shrink below content size */
+    .panel,.panel-body{min-width:0}
+    canvas{max-width:100%}
+    .panel-header{flex-wrap:wrap}
+    pre.cite{word-break:break-word}
+    .stat{min-width:0; overflow-wrap:anywhere}
   </style>
 </head>
 <body>
