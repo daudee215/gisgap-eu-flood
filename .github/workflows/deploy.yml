@@ -1,0 +1,59 @@
+# deploy.yml — sync the built demo into daudee215.github.io/gisgap-eu-flood/
+#
+# DORMANT BY DESIGN: this workflow is manual-trigger-only (workflow_dispatch).
+# It will NOT run on push, so it can never email a failure before it is wired.
+#
+# To enable auto-deploy on push (one-time setup):
+#   1. Create a fine-grained PAT with `contents: write` on
+#      daudee215/daudee215.github.io.
+#   2. Repo Settings -> Secrets and variables -> Actions -> New repository secret
+#        Name:  PAGES_PAT
+#        Value: <that token>
+#   3. (optional) add `push: { branches: [main] }` under `on:` below.
+#
+# Until then, deploys are done by syncing dist/ into the showcase repo manually.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build static site
+        run: npm run build
+
+      - name: Checkout pages repo
+        uses: actions/checkout@v4
+        with:
+          repository: daudee215/daudee215.github.io
+          token: ${{ secrets.PAGES_PAT }}
+          path: pages-repo
+
+      - name: Sync into pages repo
+        run: |
+          TARGET="pages-repo/gisgap-eu-flood"
+          rm -rf "$TARGET"
+          mkdir -p "$TARGET"
+          rsync -av dist/ "$TARGET/"
+          cd pages-repo
+          git config user.name  "gisgap-deploy[bot]"
+          git config user.email "deploy@gisgap.local"
+          git add gisgap-eu-flood
+          if git diff --cached --quiet; then echo "No changes."; exit 0; fi
+          git commit -m "deploy: gisgap-eu-flood @ ${GITHUB_SHA::7}"
+          git push
