@@ -1,0 +1,82 @@
+{
+  "$schema": "https://daudee215.github.io/geobrief/schemas/provenance-1.0.json",
+  "tool": "gisgap-eu-flood",
+  "version": "0.1.0",
+  "generated_at": "2026-06-23T00:00:00Z",
+  "generated_by": "Daud Tasleem",
+  "scene": {
+    "name": "Synthetic lower-delta AOI",
+    "location": "Modelled on a Rhine-Meuse polder setting, Netherlands (not a real coordinate)",
+    "lat": null,
+    "lon": null,
+    "extent_km": [12.0, 7.5],
+    "grid": [240, 150],
+    "cell_size_m": 50
+  },
+  "real_components": [
+    {
+      "what": "EU Floods Directive scenario definitions, return-period probability classes, six-year cycle and flood-map obligations",
+      "source": "Directive 2007/60/EC of the European Parliament and of the Council of 23 October 2007 on the assessment and management of flood risks",
+      "license": "EU legislation (public)",
+      "license_url": "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:32007L0060",
+      "attribution": "European Parliament and Council, Directive 2007/60/EC"
+    },
+    {
+      "what": "Copernicus DEM (GLO-30) cited as the open European reference elevation surface for flood-extent modelling",
+      "source": "Copernicus DEM, European Space Agency / Copernicus Programme",
+      "license": "Copernicus open licence",
+      "license_url": "https://spacedata.copernicus.eu/",
+      "attribution": "Produced using Copernicus WorldDEM-30 © ESA"
+    },
+    {
+      "what": "Copernicus Emergency Management Service (CEMS) and the European Flood Awareness System (EFAS) cited as the operational EU flood mapping/forecast services",
+      "source": "Copernicus Emergency Management Service, European Commission JRC",
+      "license": "Copernicus open licence",
+      "license_url": "https://emergency.copernicus.eu/",
+      "attribution": "© European Union, Copernicus Emergency Management Service"
+    },
+    {
+      "what": "JRC Global Surface Water cited as the source for seeding permanent water bodies",
+      "source": "Pekel, J.-F. et al. (2016) High-resolution mapping of global surface water and its long-term changes, Nature 540, 418-422",
+      "license": "CC-BY 4.0",
+      "license_url": "https://global-surface-water.appspot.com/",
+      "attribution": "EC JRC / Google, Global Surface Water dataset"
+    },
+    {
+      "what": "EU-Hydro river network and OpenStreetMap infrastructure cited as the connectivity and exposure references",
+      "source": "Copernicus Land Monitoring Service (EU-Hydro); OpenStreetMap",
+      "license": "Copernicus open licence; ODbL 1.0",
+      "license_url": "https://www.openstreetmap.org/copyright",
+      "attribution": "© OpenStreetMap contributors; Copernicus Land Monitoring Service"
+    }
+  ],
+  "synthetic_components": [
+    {
+      "what": "AOI terrain / DEM, carved river channel, coastal depression, and hillshade",
+      "method": "Multi-octave value-noise DEM with regional slope and channel carving, normalised to -1.5..12.5 m",
+      "rng_seed": "fixed: mulberry32(20070060) in index.html"
+    },
+    {
+      "what": "Road network, building footprints (~600 points across 5 settlements) and 5 critical assets",
+      "method": "Parameterised settlement clustering and polyline routing",
+      "rng_seed": "fixed: mulberry32(60601560) in index.html"
+    },
+    {
+      "what": "Inundation extent and depth grid",
+      "method": "Connectivity-aware planar inundation: a planar flood surface combined with a 4-neighbour flood-fill from permanent-water seed cells (bathtub + hydrological connectivity). First-order screening method.",
+      "rng_seed": "deterministic (no RNG)"
+    }
+  ],
+  "models_used": [],
+  "training_data": [],
+  "external_apis": [],
+  "notes": [
+    "The AOI is entirely synthetic and reproducible from fixed seeds; it is NOT a real place and must not be read as a real flood hazard map.",
+    "The inundation model is a connectivity-aware planar (bathtub) screening method. It captures hydrological connectivity but ignores flow dynamics, hydraulic roughness, defence breaching, infiltration and timing. It is not a hydrodynamic (e.g. LISFLOOD/HEC-RAS) simulation.",
+    "Return-period to water-level mappings (30 yr -> 1.7 m, 100 yr -> 2.6 m, 300 yr -> 3.6 m) are illustrative defaults for the synthetic AOI, not calibrated stage-frequency values.",
+    "Exposure counts (buildings, road km, residents, critical assets) are computed over the synthetic infrastructure, not real cadastre. Residents use a flat 2.3 occupants/building proxy.",
+    "For statutory flood hazard and risk maps, use Member-State reporting via the EEA Flood Risk Areas Viewer and WISE-Freshwater."
+  ],
+  "license": "MIT",
+  "contact": "daudtasleem215@gmail.com"
+}

@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: gisgap EU Flood Risk Viewer
+message: "If you use this tool, please cite it as below."
+type: software
+authors:
+  - family-names: "Tasleem"
+    given-names: "Daud"
+    email: "daudtasleem215@gmail.com"
+repository-code: "https://github.com/daudee215/gisgap-eu-flood"
+url: "https://daudee215.github.io/gisgap-eu-flood/"
+license: MIT
+date-released: "2026-06-23"
+version: "0.1.0"
+keywords:
+  - GIS
+  - geospatial
+  - flood-risk
+  - floods-directive
+  - copernicus
+  - inundation-modelling
+abstract: "Interactive flood-inundation viewer that drapes the EU Floods Directive (2007/60/EC) return-period scenarios over an open Copernicus-DEM landscape and quantifies infrastructure exposure using a connectivity-aware planar inundation model."

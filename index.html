@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gisgap EU Flood Risk Viewer · Floods Directive scenario explorer</title>
+  <meta name="description" content="Interactive flood-inundation viewer that drapes the EU Floods Directive return-period scenarios (30 / 100 / 300-year) over open Copernicus, JRC and OpenStreetMap data to quantify infrastructure exposure.">
+  <meta name="color-scheme" content="light">
+  <style>
+    :root{
+      --green:#176b4d; --green-light:#1d8a62; --ink:#17211c; --muted:#4a5c52;
+      --bg:#f3f7f5; --card:#ffffff; --border:#d0ddd6; --accent:#e8f4ef;
+      --red:#c0392b; --amber:#d97706; --radius:8px;
+      --water:#2a6fb0; --water-deep:#123f6b;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+      background:var(--bg); color:var(--ink); line-height:1.5;
+    }
+    a{color:var(--green)}
+    :focus-visible{outline:3px solid var(--green-light); outline-offset:2px; border-radius:4px}
+
+    /* ---- Hero ---- */
+    .hero{
+      background:linear-gradient(135deg,#0d4a34 0%,#176b4d 60%,#1d8a62 100%);
+      color:#fff; padding:48px 24px 40px; text-align:center;
+    }
+    .hero-badge{
+      display:inline-flex; align-items:center; gap:6px;
+      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+      border-radius:20px; padding:4px 12px; font-size:12px; font-weight:600;
+      letter-spacing:.06em; text-transform:uppercase; margin-bottom:16px;
+    }
+    .hero h1{font-size:clamp(22px,4vw,36px); font-weight:700; margin:0 0 10px}
+    .hero p{font-size:15px; opacity:.85; max-width:600px; margin:0 auto 24px}
+    .hero-links{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
+    .btn{
+      display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+      border-radius:var(--radius); padding:10px 18px; font-size:14px; font-weight:600;
+      border:1px solid transparent; text-decoration:none; transition:transform .08s ease, filter .15s ease;
+      font-family:inherit;
+    }
+    .btn:hover{filter:brightness(1.06)}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:#fff; color:var(--green)}
+    .btn-ghost{background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.3)}
+
+    /* ---- Layout ---- */
+    .container{max-width:1180px; margin:0 auto; padding:32px 16px 64px}
+    .grid-2{display:grid; grid-template-columns:320px 1fr; gap:24px; align-items:start}
+    @media(max-width:860px){ .grid-2{grid-template-columns:1fr} }
+
+    .panel{
+      background:var(--card); border:1px solid var(--border);
+      border-radius:var(--radius); overflow:hidden; margin-bottom:24px;
+    }
+    .panel-header{
+      background:var(--accent); border-bottom:1px solid var(--border);
+      padding:12px 16px; font-size:12px; font-weight:700;
+      letter-spacing:.06em; text-transform:uppercase; color:var(--green);
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+    }
+    .panel-body{padding:16px}
+
+    .control-label{
+      display:flex; justify-content:space-between; align-items:baseline;
+      font-size:12px; font-weight:600; color:var(--muted);
+      text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;
+    }
+    .control-label span{color:var(--green); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0}
+    input[type=range]{width:100%; accent-color:var(--green); cursor:pointer; margin:0 0 4px}
+    .hint{font-size:12px; color:var(--muted); margin:2px 0 16px}
+    .hint:last-child{margin-bottom:0}
+
+    /* scenario segmented control */
+    .scenarios{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:6px}
+    .scn{
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      border:1px solid var(--border); background:#fff; color:var(--ink);
+      border-radius:var(--radius); padding:10px 6px; cursor:pointer; font-family:inherit;
+      font-size:12px; font-weight:600; text-align:center; transition:all .12s ease;
+    }
+    .scn small{font-size:10px; font-weight:600; color:var(--muted)}
+    .scn:hover{border-color:var(--green-light)}
+    .scn[aria-pressed=true]{background:var(--green); border-color:var(--green); color:#fff}
+    .scn[aria-pressed=true] small{color:rgba(255,255,255,.85)}
+
+    /* layer toggles */
+    .toggle{display:flex; align-items:center; gap:10px; padding:7px 0; font-size:13px; color:var(--ink)}
+    .toggle input{width:16px; height:16px; accent-color:var(--green); cursor:pointer}
+    .toggle .swatch{width:14px; height:14px; border-radius:3px; border:1px solid rgba(0,0,0,.15); flex:0 0 auto}
+
+    /* ---- Map ---- */
+    .map-wrap{position:relative; width:100%; background:#dfe9e4; border-bottom:1px solid var(--border)}
+    canvas{display:block; width:100%; height:auto}
+    .map-legend{
+      position:absolute; left:12px; bottom:12px; background:rgba(255,255,255,.92);
+      border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:11px;
+      color:var(--ink); backdrop-filter:blur(2px); max-width:200px;
+    }
+    .legend-row{display:flex; align-items:center; gap:6px; margin:3px 0}
+    .legend-row i{width:14px; height:10px; border-radius:2px; flex:0 0 auto; display:inline-block}
+    .scalebar{position:absolute; right:12px; bottom:12px; background:rgba(255,255,255,.92);
+      border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:11px; color:var(--ink)}
+    .scalebar .bar{height:5px; background:var(--ink); margin-top:4px; border-radius:1px}
+
+    /* ---- Stats ---- */
+    .stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:12px}
+    .stat{background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px}
+    .stat .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600}
+    .stat .v{font-size:23px; font-weight:700; color:var(--green); font-variant-numeric:tabular-nums; margin-top:3px}
+    .stat .v.warn{color:var(--amber)} .stat .v.crit{color:var(--red)}
+    .stat .u{font-size:12px; color:var(--muted); font-weight:600; margin-left:3px}
+
+    .risk-banner{
+      display:flex; align-items:center; gap:12px; padding:14px 16px;
+      border-radius:var(--radius); margin-bottom:16px; font-size:14px; font-weight:600;
+      border:1px solid;
+    }
+    .risk-dot{width:12px; height:12px; border-radius:50%; flex:0 0 auto}
+
+    /* ---- Policy ---- */
+    .policy-row{display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--border)}
+    .policy-row:last-child{border-bottom:none}
+    .policy-row .ph{font-size:13px; font-weight:700; color:var(--green); flex:0 0 132px}
+    .policy-row .pd{font-size:13px; color:var(--ink)}
+    .pill{display:inline-block; background:var(--accent); color:var(--green); border:1px solid var(--border);
+      border-radius:20px; padding:2px 10px; font-size:11px; font-weight:700; letter-spacing:.03em}
+
+    /* sources / provenance */
+    .src{font-size:13px; color:var(--ink)}
+    .src li{margin-bottom:8px}
+    table.prov{width:100%; border-collapse:collapse; font-size:12.5px}
+    table.prov th,table.prov td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top}
+    table.prov th{background:var(--bg); color:var(--muted); text-transform:uppercase; font-size:11px; letter-spacing:.04em}
+    .tag{display:inline-block; font-size:10px; font-weight:700; padding:1px 7px; border-radius:10px; text-transform:uppercase; letter-spacing:.03em}
+    .tag.real{background:#dff0e8; color:var(--green)} .tag.syn{background:#fdeede; color:var(--amber)}
+
+    footer.site{border-top:1px solid var(--border); padding:24px 16px 48px; text-align:center; color:var(--muted); font-size:13px}
+    footer.site a{font-weight:600}
+
+    /* cite dialog */
+    dialog.cite{border:1px solid var(--border); border-radius:12px; padding:0; max-width:560px; width:92%}
+    dialog.cite::backdrop{background:rgba(13,40,30,.45)}
+    .cite-head{background:var(--accent); padding:14px 18px; font-weight:700; color:var(--green); display:flex; justify-content:space-between; align-items:center}
+    .cite-body{padding:18px}
+    pre.cite{background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; font-size:12px; overflow:auto; white-space:pre-wrap}
+    .icon-btn{background:none; border:none; cursor:pointer; font-size:20px; line-height:1; color:var(--muted); font-family:inherit}
+    .btn-sm{font-size:12px; padding:7px 12px}
+    .btn-outline{background:#fff; color:var(--green); border:1px solid var(--border)}
+    .vis-hidden{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-badge">v0.1.0 · live demo · EU open data</div>
+    <h1>EU Flood Risk Viewer</h1>
+    <p>Drape the EU Floods Directive return-period scenarios over a Copernicus-DEM landscape and read off who and what gets wet. A connectivity-aware inundation model, scored against the 2007/60/EC statutory flood probabilities.</p>
+    <div class="hero-links">
+      <a class="btn btn-primary" href="https://github.com/daudee215/gisgap-eu-flood" target="_blank" rel="noopener">View on GitHub</a>
+      <button class="btn btn-ghost" id="citeOpen" type="button">Cite this tool</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid-2">
+
+      <!-- ============ SIDEBAR ============ -->
+      <aside>
+        <section class="panel">
+          <div class="panel-header">Floods Directive scenario</div>
+          <div class="panel-body">
+            <div class="scenarios" role="group" aria-label="Return-period flood scenario">
+              <button class="scn" type="button" data-scn="high"  aria-pressed="false">High<small>T=30&nbsp;yr</small></button>
+              <button class="scn" type="button" data-scn="med"   aria-pressed="true">Medium<small>T=100&nbsp;yr</small></button>
+              <button class="scn" type="button" data-scn="low"   aria-pressed="false">Low<small>T=300&nbsp;yr</small></button>
+            </div>
+            <p class="hint">Probability classes defined in Annex&nbsp;I of Directive&nbsp;2007/60/EC: high (≈30-yr), medium (≈100-yr) and low (≈300-yr) return periods.</p>
+
+            <div class="control-label" for="wl">Design water level <span id="wlVal">2.6 m</span></div>
+            <input type="range" id="wl" min="0" max="6" step="0.1" value="2.6" aria-describedby="wlHint">
+            <p class="hint" id="wlHint">Planar flood-surface height above the AOI reference datum (NAP-equivalent).</p>
+
+            <div class="control-label" for="slr">Climate add-on (SLR / surge) <span id="slrVal">+0.0 m</span></div>
+            <input type="range" id="slr" min="0" max="1.5" step="0.1" value="0" aria-describedby="slrHint">
+            <p class="hint" id="slrHint">Added to the design level to stress-test the 3rd-cycle (2022–2027) climate scenario.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">Map layers</div>
+          <div class="panel-body">
+            <label class="toggle"><input type="checkbox" id="lyHill" checked><span class="swatch" style="background:#b8c6bd"></span>Hillshade terrain (Copernicus DEM)</label>
+            <label class="toggle"><input type="checkbox" id="lyWater" checked><span class="swatch" style="background:var(--water)"></span>Inundation depth</label>
+            <label class="toggle"><input type="checkbox" id="lyRoads" checked><span class="swatch" style="background:#3a3a3a"></span>Road network (OSM)</label>
+            <label class="toggle"><input type="checkbox" id="lyBldg" checked><span class="swatch" style="background:#7a5230"></span>Buildings (OSM)</label>
+            <label class="toggle"><input type="checkbox" id="lyCrit" checked><span class="swatch" style="background:var(--red)"></span>Critical assets</label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">Area of interest</div>
+          <div class="panel-body">
+            <p class="hint" style="margin-bottom:8px">Synthetic lower-delta AOI, 12&nbsp;×&nbsp;7.5&nbsp;km, 50&nbsp;m grid. Modelled on a Rhine–Meuse polder setting (NL). Terrain, network and assets are procedurally generated from a fixed seed — see provenance.</p>
+            <button class="btn btn-outline btn-sm" id="copyLink" type="button">Copy shareable link</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- ============ MAIN ============ -->
+      <section>
+        <div class="panel">
+          <div class="panel-header">
+            <span>Inundation map</span>
+            <span id="scnTag" class="pill">Medium · T=100&nbsp;yr</span>
+          </div>
+          <div class="map-wrap">
+            <canvas id="map" width="960" height="600" role="img"
+              aria-label="Flood inundation map of the area of interest under the selected scenario"></canvas>
+            <div class="map-legend" aria-hidden="true">
+              <strong style="font-size:11px">Inundation depth</strong>
+              <div class="legend-row"><i style="background:#9ec9ec"></i>&lt; 0.5 m</div>
+              <div class="legend-row"><i style="background:#4a90d0"></i>0.5 – 1.5 m</div>
+              <div class="legend-row"><i style="background:#2a6fb0"></i>1.5 – 3 m</div>
+              <div class="legend-row"><i style="background:#123f6b"></i>&gt; 3 m</div>
+            </div>
+            <div class="scalebar" aria-hidden="true">2 km<div class="bar" style="width:80px"></div></div>
+          </div>
+        </div>
+
+        <div id="riskBanner" class="risk-banner" role="status" aria-live="polite">
+          <span class="risk-dot"></span><span id="riskText">Calculating exposure…</span>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">Exposure under this scenario</div>
+          <div class="panel-body">
+            <div class="stat-grid" id="stats" aria-live="polite">
+              <div class="stat"><div class="k">Flooded area</div><div class="v" id="sArea">—<span class="u">km²</span></div></div>
+              <div class="stat"><div class="k">Share of AOI</div><div class="v" id="sShare">—<span class="u">%</span></div></div>
+              <div class="stat"><div class="k">Buildings exposed</div><div class="v" id="sBldg">—</div></div>
+              <div class="stat"><div class="k">Road length cut</div><div class="v" id="sRoad">—<span class="u">km</span></div></div>
+              <div class="stat"><div class="k">Residents affected</div><div class="v" id="sPop">—</div></div>
+              <div class="stat"><div class="k">Critical assets hit</div><div class="v" id="sCrit">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">What the Floods Directive requires here</div>
+          <div class="panel-body">
+            <div class="policy-row"><div class="ph">Legal basis</div><div class="pd">Directive <strong>2007/60/EC</strong> on the assessment and management of flood risks, adopted 23&nbsp;October&nbsp;2007.</div></div>
+            <div class="policy-row"><div class="ph">This scenario</div><div class="pd" id="polScn">Medium-probability event, ~100-year return period. For each scenario the Directive requires both flood <em>extent</em> and flow <em>velocity</em> to be mapped (Art.&nbsp;6).</div></div>
+            <div class="policy-row"><div class="ph">Three-phase duty</div><div class="pd">Preliminary flood risk assessment → flood hazard &amp; risk maps → flood risk management plans. Each is reviewed and updated on a <strong>6-year cycle</strong>.</div></div>
+            <div class="policy-row"><div class="ph">Current cycle</div><div class="pd"><span class="pill">3rd cycle · 2022–2027</span> Member States are updating maps and management plans, increasingly with climate-change scenarios layered in.</div></div>
+            <div class="policy-row"><div class="ph">Official maps</div><div class="pd">Reported maps are aggregated in the EEA <a href="https://discomap.eea.europa.eu/floodsviewer/" target="_blank" rel="noopener">Flood Risk Areas Viewer</a> and WISE-Freshwater. This tool is a screening companion, not a substitute.</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">Open data this connects to</div>
+          <div class="panel-body">
+            <ul class="src">
+              <li><strong>Copernicus DEM (GLO-30)</strong> — 30 m global elevation, the open European reference surface for terrain and flood-extent modelling. ESA / Copernicus open licence.</li>
+              <li><strong>Copernicus Emergency Management Service (CEMS)</strong> — rapid flood delineation plus the <strong>European Flood Awareness System (EFAS)</strong> for continental forecasts.</li>
+              <li><strong>JRC Global Surface Water</strong> — Landsat-derived surface-water occurrence (Pekel et al., 2016, <em>Nature</em>), used to seed permanent water bodies.</li>
+              <li><strong>EU-Hydro / Copernicus Land Monitoring Service</strong> — harmonised river-and-catchment network for hydrological connectivity.</li>
+              <li><strong>OpenStreetMap</strong> — buildings, roads and critical-asset locations. © OpenStreetMap contributors, ODbL 1.0.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">Provenance — what is real vs. synthetic</div>
+          <div class="panel-body">
+            <table class="prov">
+              <thead><tr><th>Component</th><th>Class</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>Floods Directive scenario definitions &amp; obligations</td><td><span class="tag real">real</span></td><td>Return-period classes, 6-year cycle and mapping duties are quoted from Directive 2007/60/EC.</td></tr>
+                <tr><td>Listed open datasets &amp; licences</td><td><span class="tag real">real</span></td><td>Copernicus DEM, CEMS/EFAS, JRC GSW, EU-Hydro and OSM are real, openly licensed EU-level sources.</td></tr>
+                <tr><td>AOI terrain (DEM), river channel, road network, buildings, assets</td><td><span class="tag syn">synthetic</span></td><td>Procedurally generated from a fixed Mulberry32 seed so the demo is reproducible offline. Not a real location.</td></tr>
+                <tr><td>Inundation surface</td><td><span class="tag syn">model</span></td><td>Connectivity-aware planar ("bathtub + flood-fill") model — a first-order screening method, not a hydrodynamic simulation.</td></tr>
+              </tbody>
+            </table>
+            <p class="hint" style="margin-top:12px">Full machine-readable record: <a href="data/PROVENANCE.json" target="_blank" rel="noopener">data/PROVENANCE.json</a>. Methodology: <a href="docs/pipeline.md" target="_blank" rel="noopener">docs/pipeline.md</a>.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site">
+    Built by <a href="https://github.com/daudee215" target="_blank" rel="noopener">Daud Tasleem</a> ·
+    MIT licence · Screening tool — for statutory flood maps use the
+    <a href="https://discomap.eea.europa.eu/floodsviewer/" target="_blank" rel="noopener">EEA Flood Risk Areas Viewer</a>.
+  </footer>
+
+  <dialog class="cite" id="citeDlg" aria-label="Citation">
+    <div class="cite-head"><span>Cite this tool</span><button class="icon-btn" id="citeClose" type="button" aria-label="Close">×</button></div>
+    <div class="cite-body">
+      <p style="font-size:13px;margin:0 0 12px">Tasleem, D. (2026). <em>gisgap EU Flood Risk Viewer</em> — Floods Directive scenario explorer (v0.1.0) [software].</p>
+      <pre class="cite" id="citeText">@software{tasleem_gisgap_eu_flood_2026,
+  author  = {Tasleem, Daud},
+  title   = {gisgap EU Flood Risk Viewer},
+  version = {0.1.0},
+  year    = {2026},
+  url     = {https://daudee215.github.io/gisgap-eu-flood/}
+}</pre>
+      <button class="btn btn-primary btn-sm" id="citeCopy" type="button">Copy BibTeX</button>
+    </div>
+  </dialog>
+
+  <div id="srStatus" class="vis-hidden" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- seeded PRNG ----------
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+  // ---------- AOI / grid ----------
+  const GW=240, GH=150;                 // grid cells
+  const AOI_W_M=12000, AOI_H_M=7500;    // metres
+  const CELL_M=AOI_W_M/GW;              // 50 m
+  const CELL_KM2=(CELL_M*CELL_M)/1e6;   // 0.0025 km²
+  const TOTAL_KM2=(AOI_W_M*AOI_H_M)/1e6;
+
+  // ---------- terrain ----------
+  // value-noise DEM + carved river channel + sea gradient on the SW corner.
+  const rnd=mulberry32(20070060); // seed = directive number, for fun + reproducibility
+  function valueNoise(seed){
+    const r=mulberry32(seed); const S=24;            // coarse lattice
+    const lat=new Float32Array((S+1)*(S+1));
+    for(let i=0;i<lat.length;i++) lat[i]=r();
+    return (gx,gy)=>{
+      const fx=gx/GW*S, fy=gy/GH*S;
+      const x0=Math.floor(fx), y0=Math.floor(fy);
+      const tx=fx-x0, ty=fy-y0;
+      const sx=tx*tx*(3-2*tx), sy=ty*ty*(3-2*ty);
+      const a=lat[y0*(S+1)+x0], b=lat[y0*(S+1)+x0+1];
+      const c=lat[(y0+1)*(S+1)+x0], d=lat[(y0+1)*(S+1)+x0+1];
+      return (a*(1-sx)+b*sx)*(1-sy)+(c*(1-sx)+d*sx)*sy;
+    };
+  }
+  const n1=valueNoise(11), n2=valueNoise(37), n3=valueNoise(83);
+
+  // river path: sinusoid running W->E, dipping toward the sea corner
+  function riverY(gx){ return GH*(0.62 + 0.16*Math.sin(gx/GW*Math.PI*1.6) - 0.10*(gx/GW)); }
+
+  const elev=new Float32Array(GW*GH);   // metres above datum
+  const isWaterSrc=new Uint8Array(GW*GH); // permanent water (sea + river) -> connectivity seeds
+  let eMin=Infinity, eMax=-Infinity;
+  for(let gy=0; gy<GH; gy++){
+    for(let gx=0; gx<GW; gx++){
+      const i=gy*GW+gx;
+      let e = 9*n1(gx,gy) + 4.5*n2(gx*1.7,gy*1.7) + 2*n3(gx*3.1,gy*3.1);
+      // gentle regional slope: high in NE, low toward SW sea corner
+      e += 5*(gx/GW) + 3*((GH-gy)/GH);
+      e -= 7*Math.exp(-(Math.pow(gx/GW,2)+Math.pow(gy/GH,2))/0.10); // SW sea depression
+      // carve river channel
+      const ry=riverY(gx); const d=Math.abs(gy-ry);
+      if(d<3.5){ e -= (3.5-d)*1.4; }
+      elev[i]=e;
+    }
+  }
+  // normalise so datum (0 m) sits near the channel/sea; keep spread realistic
+  for(let i=0;i<elev.length;i++){ if(elev[i]<eMin)eMin=elev[i]; if(elev[i]>eMax)eMax=elev[i]; }
+  for(let i=0;i<elev.length;i++){ elev[i]=(elev[i]-eMin)/(eMax-eMin)*14 - 1.5; } // -1.5 .. 12.5 m
+  // mark permanent water sources: sea corner + river channel cells below 0.3 m
+  for(let gy=0; gy<GH; gy++){
+    for(let gx=0; gx<GW; gx++){
+      const i=gy*GW+gx; const ry=riverY(gx);
+      if(elev[i] < 0.2) isWaterSrc[i]=1;
+      if(Math.abs(gy-ry)<2.0) isWaterSrc[i]=1;
+    }
+  }
+
+  // hillshade (fixed NW light)
+  const shade=new Float32Array(GW*GH);
+  for(let gy=0; gy<GH; gy++){
+    for(let gx=0; gx<GW; gx++){
+      const i=gy*GW+gx;
+      const l=elev[gy*GW+Math.max(0,gx-1)], r=elev[gy*GW+Math.min(GW-1,gx+1)];
+      const u=elev[Math.max(0,gy-1)*GW+gx], d=elev[Math.min(GH-1,gy+1)*GW+gx];
+      const nx=(l-r), ny=(u-d), nz=2.2;
+      const len=Math.hypot(nx,ny,nz);
+      shade[i]=Math.max(0,(nx*-0.5+ny*-0.6+nz*0.62)/len); // 0..1
+    }
+  }
+
+  // ---------- infrastructure (seeded) ----------
+  const bRnd=mulberry32(60601560);
+  // buildings clustered into a few settlements on moderately high, near-river ground
+  const buildings=[];
+  const centres=[[0.30,0.40],[0.55,0.70],[0.74,0.46],[0.42,0.78],[0.85,0.66]];
+  for(const [cxN,cyN] of centres){
+    const count=110+Math.floor(bRnd()*70);
+    for(let k=0;k<count;k++){
+      const ang=bRnd()*Math.PI*2, rad=Math.pow(bRnd(),0.6)*0.085;
+      const gx=Math.round((cxN+Math.cos(ang)*rad)*GW);
+      const gy=Math.round((cyN+Math.sin(ang)*rad*1.6)*GH);
+      if(gx<1||gy<1||gx>=GW-1||gy>=GH-1) continue;
+      buildings.push({gx,gy});
+    }
+  }
+  // road network: settlement-to-settlement polylines + a riverside dyke road
+  function pts(ax,ay,bx,by,n){const a=[];for(let k=0;k<=n;k++){const t=k/n;a.push([ (ax+(bx-ax)*t)+(bRnd()-0.5)*0.02, (ay+(by-ay)*t)+(bRnd()-0.5)*0.02 ]);}return a;}
+  const roads=[];
+  roads.push(pts(0.30,0.40,0.55,0.70,40));
+  roads.push(pts(0.55,0.70,0.74,0.46,36));
+  roads.push(pts(0.74,0.46,0.85,0.66,24));
+  roads.push(pts(0.42,0.78,0.55,0.70,20));
+  roads.push(pts(0.30,0.40,0.74,0.46,52));
+  // riverside road follows the channel
+  { const rp=[]; for(let gx=6;gx<GW-6;gx+=4){ rp.push([gx/GW, (riverY(gx)-4)/GH]); } roads.push(rp); }
+
+  // critical assets — labelled points placed on settlements
+  const assets=[
+    {name:'Hospital',           gx:Math.round(0.55*GW), gy:Math.round(0.70*GH)},
+    {name:'Power substation',   gx:Math.round(0.31*GW), gy:Math.round(0.44*GH)},
+    {name:'Water treatment',    gx:Math.round(0.40*GW), gy:Math.round(0.80*GH)},
+    {name:'School',             gx:Math.round(0.74*GW), gy:Math.round(0.46*GH)},
+    {name:'Pumping station',    gx:Math.round(0.86*GW), gy:Math.round(0.64*GH)},
+  ];
+
+  // ---------- inundation (connectivity-aware planar fill) ----------
+  const flooded=new Uint8Array(GW*GH);
+  const depth=new Float32Array(GW*GH);
+  const queue=new Int32Array(GW*GH);
+  function computeFlood(level){
+    flooded.fill(0); let head=0,tail=0, area=0;
+    for(let i=0;i<GW*GH;i++){
+      if(isWaterSrc[i] && elev[i]<=level){ flooded[i]=1; queue[tail++]=i; }
+    }
+    while(head<tail){
+      const i=queue[head++]; const gx=i%GW, gy=(i/GW)|0;
+      const nb=[ gx>0?i-1:-1, gx<GW-1?i+1:-1, gy>0?i-GW:-1, gy<GH-1?i+GW:-1 ];
+      for(const j of nb){ if(j>=0 && !flooded[j] && elev[j]<=level){ flooded[j]=1; queue[tail++]=j; } }
+    }
+    for(let i=0;i<GW*GH;i++){
+      if(flooded[i]){ depth[i]=level-elev[i]; if(elev[i]>=0) area++; } else depth[i]=0;
+    }
+    return area; // count of dry-land cells now under water (excludes permanent sea/river bed)
+  }
+
+  // ---------- state ----------
+  const SCN={ high:{wl:1.7,label:'High',rp:'T=30 yr'}, med:{wl:2.6,label:'Medium',rp:'T=100 yr'}, low:{wl:3.6,label:'Low',rp:'T=300 yr'} };
+  const state={ scn:'med', wl:2.6, slr:0.0,
+    layers:{hill:true,water:true,roads:true,bldg:true,crit:true} };
+
+  // ---------- canvas ----------
+  const canvas=document.getElementById('map'), ctx=canvas.getContext('2d');
+  const terrainCv=document.createElement('canvas'); terrainCv.width=GW; terrainCv.height=GH;
+  const tctx=terrainCv.getContext('2d'); const timg=tctx.createImageData(GW,GH);
+
+  function depthColour(d){
+    if(d<0.5)  return [158,201,236];
+    if(d<1.5)  return [74,144,208];
+    if(d<3.0)  return [42,111,176];
+    return [18,63,107];
+  }
+  function paintTerrain(){
+    const px=timg.data;
+    for(let i=0;i<GW*GH;i++){
+      let r,g,b;
+      if(state.layers.water && flooded[i]){
+        const c=depthColour(depth[i]); r=c[0];g=c[1];b=c[2];
+      } else if(isWaterSrc[i] && elev[i]<0.1){
+        r=120;g=160;b=195; // permanent water
+      } else {
+        // land hypsometric tint modulated by hillshade
+        const e=elev[i]; const t=Math.max(0,Math.min(1,(e+1.5)/14));
+        // green lowland -> tan upland
+        r=110+t*120; g=150-t*40; b=110-t*55;
+        if(state.layers.hill){ const s=0.55+0.55*shade[i]; r*=s; g*=s; b*=s; }
+      }
+      const p=i*4; px[p]=r; px[p+1]=g; px[p+2]=b; px[p+3]=255;
+    }
+    tctx.putImageData(timg,0,0);
+  }
+
+  function draw(){
+    const W=canvas.width, H=canvas.height;
+    ctx.imageSmoothingEnabled=true;
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(terrainCv,0,0,GW,GH,0,0,W,H);
+    const sx=W/GW, sy=H/GH;
+
+    // roads
+    if(state.layers.roads){
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      for(const r of roads){
+        // casing
+        ctx.strokeStyle='rgba(20,20,20,.85)'; ctx.lineWidth=3.4;
+        ctx.beginPath();
+        r.forEach((p,k)=>{const X=p[0]*W, Y=p[1]*H; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+        ctx.stroke();
+        // fill — red where the road crosses flooded ground
+        ctx.beginPath(); let cut=false;
+        for(let k=0;k<r.length-1;k++){
+          const a=r[k],b=r[k+1];
+          const mgx=Math.round((a[0]+b[0])/2*GW), mgy=Math.round((a[1]+b[1])/2*GH);
+          const fl=flooded[Math.min(GW*GH-1,Math.max(0,mgy*GW+mgx))];
+          ctx.strokeStyle=fl?'#e23b2e':'#f4f1ea'; ctx.lineWidth=1.8;
+          ctx.beginPath(); ctx.moveTo(a[0]*W,a[1]*H); ctx.lineTo(b[0]*W,b[1]*H); ctx.stroke();
+          if(fl) cut=true;
+        }
+      }
+    }
+    // buildings
+    if(state.layers.bldg){
+      for(const b of buildings){
+        const fl=flooded[b.gy*GW+b.gx];
+        ctx.fillStyle=fl?'rgba(200,40,30,.92)':'rgba(90,62,40,.9)';
+        ctx.fillRect(b.gx*sx-1.4, b.gy*sy-1.4, 2.8, 2.8);
+      }
+    }
+    // critical assets
+    if(state.layers.crit){
+      ctx.font='600 11px -apple-system,Segoe UI,system-ui,sans-serif';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      for(const a of assets){
+        const X=a.gx*sx, Y=a.gy*sy; const fl=flooded[a.gy*GW+a.gx];
+        ctx.fillStyle=fl?'#c0392b':'#176b4d';
+        ctx.beginPath(); ctx.arc(X,Y,5,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+        const label=a.name+(fl?' ⚠':'');
+        ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)';
+        ctx.strokeText(label, X+8, Y); ctx.fillStyle='#17211c'; ctx.fillText(label, X+8, Y);
+      }
+    }
+  }
+
+  // ---------- stats ----------
+  function fmt(n){ return n>=1000? n.toLocaleString('en-US') : String(n); }
+  function recompute(){
+    const level=state.wl+state.slr;
+    const areaCells=computeFlood(level);
+    paintTerrain(); draw();
+
+    const areaKm2=areaCells*CELL_KM2;
+    const share=areaKm2/TOTAL_KM2*100;
+    let bExp=0; for(const b of buildings){ if(flooded[b.gy*GW+b.gx]) bExp++; }
+    let roadCutM=0;
+    for(const r of roads){ for(let k=0;k<r.length-1;k++){
+      const a=r[k],b=r[k+1]; const mgx=Math.round((a[0]+b[0])/2*GW), mgy=Math.round((a[1]+b[1])/2*GH);
+      if(flooded[Math.min(GW*GH-1,Math.max(0,mgy*GW+mgx))]){
+        roadCutM += Math.hypot((b[0]-a[0])*AOI_W_M,(b[1]-a[1])*AOI_H_M);
+      }
+    }}
+    let cExp=0; for(const a of assets){ if(flooded[a.gy*GW+a.gx]) cExp++; }
+    const pop=Math.round(bExp*2.3);
+
+    document.getElementById('sArea').innerHTML = areaKm2.toFixed(2)+'<span class="u">km²</span>';
+    document.getElementById('sShare').innerHTML= share.toFixed(1)+'<span class="u">%</span>';
+    document.getElementById('sBldg').textContent= fmt(bExp);
+    document.getElementById('sRoad').innerHTML = (roadCutM/1000).toFixed(1)+'<span class="u">km</span>';
+    document.getElementById('sPop').textContent = fmt(pop);
+    const critEl=document.getElementById('sCrit');
+    critEl.textContent=cExp+' / '+assets.length;
+    critEl.className='v'+(cExp>=3?' crit':cExp>=1?' warn':'');
+
+    // risk banner
+    const b=document.getElementById('riskBanner'), t=document.getElementById('riskText');
+    let lvl,col,bg,bd,msg;
+    if(share<6){lvl='Low';col='#176b4d';bg='#e7f4ed';bd='#bfe0d0';msg='Limited inundation — mostly channel margins and low polder.';}
+    else if(share<16){lvl='Moderate';col='#d97706';bg='#fdf3e3';bd='#f1d8a8';msg='Several settlements and road links exposed — management measures triggered.';}
+    else{lvl='High';col='#c0392b';bg='#fbe9e7';bd='#f1c0b9';msg='Widespread flooding — critical assets and evacuation routes at risk.';}
+    b.style.background=bg; b.style.borderColor=bd; b.style.color=col;
+    b.querySelector('.risk-dot').style.background=col;
+    t.textContent=`${lvl} flood risk · ${msg}`;
+
+    // tags + policy text
+    const s=SCN[state.scn];
+    document.getElementById('scnTag').innerHTML=`${s.label} · ${s.rp.replace('=','=').replace(' ','&nbsp;')}`;
+    const rpWord={high:'high-probability',med:'medium-probability',low:'low-probability'}[state.scn];
+    document.getElementById('polScn').innerHTML=
+      `${rpWord.charAt(0).toUpperCase()+rpWord.slice(1)} event, ~${s.rp.replace('T=','').trim()} return period. For each scenario the Directive requires both flood <em>extent</em> and flow <em>velocity</em> to be mapped (Art.&nbsp;6).`;
+    document.getElementById('srStatus').textContent=`${s.label} scenario, water level ${level.toFixed(1)} metres: ${areaKm2.toFixed(2)} square km flooded, ${bExp} buildings exposed.`;
+  }
+
+  // ---------- responsive canvas ----------
+  function sizeCanvas(){
+    const wrap=canvas.parentElement;
+    const cssW=wrap.clientWidth;
+    const cssH=Math.round(cssW*GH/GW);
+    const dpr=Math.min(2, window.devicePixelRatio||1);
+    canvas.style.height=cssH+'px';
+    canvas.width=Math.round(cssW*dpr);
+    canvas.height=Math.round(cssH*dpr);
+    draw();
+  }
+
+  // ---------- URL hash state (shareable links) ----------
+  function readHash(){
+    const h=new URLSearchParams(location.hash.slice(1));
+    if(h.has('scn')&&SCN[h.get('scn')]) state.scn=h.get('scn');
+    if(h.has('wl')) state.wl=Math.max(0,Math.min(6,parseFloat(h.get('wl'))||SCN[state.scn].wl));
+    else state.wl=SCN[state.scn].wl;
+    if(h.has('slr')) state.slr=Math.max(0,Math.min(1.5,parseFloat(h.get('slr'))||0));
+    for(const k of ['hill','water','roads','bldg','crit']){ if(h.get(k)==='0') state.layers[k]=false; }
+  }
+  function writeHash(){
+    const h=new URLSearchParams();
+    h.set('scn',state.scn); h.set('wl',state.wl.toFixed(1)); h.set('slr',state.slr.toFixed(1));
+    for(const k of ['hill','water','roads','bldg','crit']){ if(!state.layers[k]) h.set(k,'0'); }
+    history.replaceState(null,'','#'+h.toString());
+  }
+
+  function syncControls(){
+    document.querySelectorAll('.scn').forEach(btn=>btn.setAttribute('aria-pressed', String(btn.dataset.scn===state.scn)));
+    document.getElementById('wl').value=state.wl;
+    document.getElementById('wlVal').textContent=state.wl.toFixed(1)+' m';
+    document.getElementById('slr').value=state.slr;
+    document.getElementById('slrVal').textContent='+'+state.slr.toFixed(1)+' m';
+    document.getElementById('lyHill').checked=state.layers.hill;
+    document.getElementById('lyWater').checked=state.layers.water;
+    document.getElementById('lyRoads').checked=state.layers.roads;
+    document.getElementById('lyBldg').checked=state.layers.bldg;
+    document.getElementById('lyCrit').checked=state.layers.crit;
+  }
+
+  // ---------- events ----------
+  document.querySelectorAll('.scn').forEach(btn=>{
+    btn.addEventListener('click',()=>{ state.scn=btn.dataset.scn; state.wl=SCN[state.scn].wl;
+      syncControls(); writeHash(); recompute(); });
+  });
+  const wl=document.getElementById('wl');
+  wl.addEventListener('input',()=>{ state.wl=parseFloat(wl.value);
+    document.getElementById('wlVal').textContent=state.wl.toFixed(1)+' m'; writeHash(); recompute(); });
+  const slr=document.getElementById('slr');
+  slr.addEventListener('input',()=>{ state.slr=parseFloat(slr.value);
+    document.getElementById('slrVal').textContent='+'+state.slr.toFixed(1)+' m'; writeHash(); recompute(); });
+  const lyMap={lyHill:'hill',lyWater:'water',lyRoads:'roads',lyBldg:'bldg',lyCrit:'crit'};
+  Object.keys(lyMap).forEach(id=>{
+    document.getElementById(id).addEventListener('change',e=>{ state.layers[lyMap[id]]=e.target.checked; writeHash(); recompute(); });
+  });
+  document.getElementById('copyLink').addEventListener('click',async (e)=>{
+    writeHash();
+    try{ await navigator.clipboard.writeText(location.href); e.target.textContent='Link copied ✓';
+      setTimeout(()=>e.target.textContent='Copy shareable link',1600);
+    }catch(_){ e.target.textContent='Copy failed'; setTimeout(()=>e.target.textContent='Copy shareable link',1600); }
+  });
+
+  // cite dialog
+  const dlg=document.getElementById('citeDlg');
+  document.getElementById('citeOpen').addEventListener('click',()=>dlg.showModal());
+  document.getElementById('citeClose').addEventListener('click',()=>dlg.close());
+  dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+  document.getElementById('citeCopy').addEventListener('click',async(e)=>{
+    try{ await navigator.clipboard.writeText(document.getElementById('citeText').textContent);
+      e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy BibTeX',1500);}catch(_){}
+  });
+
+  let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(sizeCanvas,120); });
+
+  // ---------- init ----------
+  readHash(); syncControls(); sizeCanvas(); recompute();
+})();
+</script>
+</body>
+</html>

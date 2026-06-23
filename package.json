@@ -1,0 +1,19 @@
+{
+  "name": "gisgap-eu-flood",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive EU flood-inundation viewer driven by the Floods Directive return-period scenarios over open Copernicus / JRC / OpenStreetMap data.",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build-static.mjs",
+    "audit:layout": "npm run build && node tools/audit-layout.mjs",
+    "audit:layout:ci": "npm run build && node tools/audit-layout.mjs --json-only",
+    "audit:install": "npx playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.47.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
